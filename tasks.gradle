@@ -54,3 +54,5 @@ task deploySite(type: Exec) {
   commandLine('./deploy.sh')
 }
 
+tasks.processResources.dependsOn tasks.generateGitProperties
+tasks.sourcesJar.dependsOn tasks.generateGitProperties
