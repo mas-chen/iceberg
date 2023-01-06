@@ -19,7 +19,11 @@
 package org.apache.iceberg.flink.sink;
 
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
+import static org.apache.iceberg.TableProperties.FLINK_WATERMARK;
+import static org.apache.iceberg.TableProperties.FLINK_WATERMARK_DEFAULT;
+import static org.apache.iceberg.TableProperties.FLINK_WATERMARK_ENABLED;
 import static org.apache.iceberg.flink.sink.IcebergFilesCommitter.MAX_CONTINUOUS_EMPTY_COMMITS;
+import static org.apache.iceberg.flink.sink.IcebergFilesCommitter.getLatestWatermarkFromSnapshots;
 import static org.apache.iceberg.flink.sink.ManifestOutputFileFactory.FLINK_MANIFEST_LOCATION;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -992,6 +996,99 @@ public class TestIcebergFilesCommitter extends TableTestBase {
         SimpleVersionedSerialization.readVersionAndDeSerialize(
             DeltaManifestsSerializer.INSTANCE, statedDataFiles.get(checkPointId));
     return deltaManifests.dataManifest().partitionSpecId();
+  }
+
+  public void testWatermarkWithData() throws Exception {
+    table.updateProperties().set(FLINK_WATERMARK_ENABLED, "true").commit();
+    // Empty Case
+    Assert.assertEquals(FLINK_WATERMARK_DEFAULT, getLatestWatermarkFromSnapshots(table, branch));
+
+    OperatorSubtaskState snapshot;
+
+    try (OneInputStreamOperatorTestHarness<WriteResult, Void> harness =
+        createStreamSink(new JobID())) {
+      harness.setup();
+      harness.open();
+
+      // Snapshot 1: Only Watermarks
+      harness.processWatermark(0L);
+      harness.processWatermark(10L);
+
+      snapshot = harness.snapshot(1, 100);
+      harness.notifyOfCompletedCheckpoint(1);
+      table.refresh();
+      Assert.assertEquals(10L, getLatestWatermarkFromSnapshots(table, branch));
+
+      // Snapshot 2: Watermarks and Data files
+      harness.processWatermark(20L);
+      RowData insert1 = SimpleDataUtil.createInsert(1, "aaa");
+      DataFile dataFile1 = writeDataFile("data-file-1", ImmutableList.of(insert1));
+      harness.processElement(WriteResult.builder().addDataFiles(dataFile1).build(), 200);
+      harness.processWatermark(30L);
+      harness.snapshot(2, 200);
+      harness.notifyOfCompletedCheckpoint(2);
+
+      table.refresh();
+      assertSnapshotSize(2);
+      Assert.assertEquals(30L, getLatestWatermarkFromSnapshots(table, branch));
+
+      // Snapshot 3: Process an old watermark should not move the watermark forward.
+      harness.processWatermark(20L);
+      harness.processWatermark(25L);
+      harness.snapshot(3, 300);
+      harness.notifyOfCompletedCheckpoint(3);
+      table.refresh();
+      assertSnapshotSize(3);
+      Assert.assertEquals(30L, getLatestWatermarkFromSnapshots(table, branch));
+    }
+  }
+
+  @Test
+  public void testWatermarkRecovery() throws Exception {
+    table.updateProperties().set(FLINK_WATERMARK_ENABLED, "true").commit();
+    // Empty Case
+    Assert.assertEquals(FLINK_WATERMARK_DEFAULT, getLatestWatermarkFromSnapshots(table, branch));
+
+    OperatorSubtaskState snapshot;
+    try (OneInputStreamOperatorTestHarness<WriteResult, Void> harness =
+        createStreamSink(new JobID())) {
+      harness.setup();
+      harness.open();
+
+      // Snapshot 1
+      harness.processWatermark(10L);
+      snapshot = harness.snapshot(1, 100);
+      harness.notifyOfCompletedCheckpoint(1);
+
+      // Snapshot 2
+      harness.processWatermark(20L);
+      harness.snapshot(2, 200);
+      harness.notifyOfCompletedCheckpoint(2);
+    }
+
+    try (OneInputStreamOperatorTestHarness<WriteResult, Void> harness =
+        createStreamSink(new JobID())) {
+      harness.setup();
+      // Before Restore
+      Assert.assertEquals(0, ((IcebergFilesCommitter) harness.getOperator()).currentWatermark());
+      harness.initializeState(snapshot);
+      // Test if watermark is restored. Although committer restored from snapshot 1, committer
+      // always restore
+      // the watermark from the most recent table snapshot (snapshot 2) as we never want watermark
+      // to move backward.
+      Assert.assertEquals(20L, ((IcebergFilesCommitter) harness.getOperator()).currentWatermark());
+
+      harness.open();
+      harness.processWatermark(15L);
+      harness.snapshot(3, 300);
+      harness.notifyOfCompletedCheckpoint(3);
+
+      table.refresh();
+      // If watermark is not restored, the snapshot summary will not have FLINK_WATERMARK entry.
+      Assert.assertNotNull(table.snapshot(branch).summary().get(FLINK_WATERMARK));
+      // Test if watermark will move backward, it should not move back to 15L
+      Assert.assertEquals(20L, getLatestWatermarkFromSnapshots(table, branch));
+    }
   }
 
   private DeleteFile writeEqDeleteFile(
