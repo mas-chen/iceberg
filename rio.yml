@@ -20,12 +20,12 @@ reports:
 pipelines:
 
 # prb builds
-- branchName: apple-0.12.x-preview-prb
+- branchName: aiml-flink-1.4.x-release-prb
   build:
     template: buildozer:v4:prb
 
 # publish pipelines
-- branchName: apple-0.12.x-preview-release
+- branchName: aiml-flink-1.4.x-release
   build:
     template: buildozer:v4:publish
   package:
