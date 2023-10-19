@@ -50,14 +50,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-
 public class TestParquetEncryption {
 
-  private static final String columnName = "intCol";
-  private static final int recordCount = 100;
-  private static final byte[] fileDek = new byte[16];
-  private static File file;
-  private static final Schema schema = new Schema(optional(1, columnName, IntegerType.get()));
+  private final String columnName = "intCol";
+  private final int recordCount = 100;
+  private final byte[] fileDek = new byte[16];
+  private File file;
+  private final Schema schema = new Schema(optional(1, columnName, IntegerType.get()));
 
   @TempDir private Path temp;
 
