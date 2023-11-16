@@ -75,6 +75,8 @@ import org.slf4j.LoggerFactory;
 public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEnumeratorState> {
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSource.class);
 
+  // this table loader can be closed, and it is only safe to use this instance for resource
+  // independent information (e.g. a table name)
   private final TableLoader tableLoader;
   private final ScanContext scanContext;
   private final ReaderFunction<T> readerFunction;
@@ -101,7 +103,7 @@ public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEn
   }
 
   String name() {
-    return "IcebergSource-" + lazyTable().name();
+    return "IcebergSource-" + tableName();
   }
 
   private String planningThreadName() {
@@ -111,26 +113,30 @@ public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEn
     // a public API like the protected method "OperatorCoordinator.Context getCoordinatorContext()"
     // from SourceCoordinatorContext implementation. For now, <table name>-<random UUID> is used as
     // the unique thread pool name.
-    return lazyTable().name() + "-" + UUID.randomUUID();
+    return tableName() + "-" + UUID.randomUUID();
   }
 
-  private List<IcebergSourceSplit> planSplitsForBatch(String threadName) {
+  @SuppressWarnings("checkstyle:HiddenField")
+  private List<IcebergSourceSplit> planSplitsForBatch(TableLoader tableLoader, String threadName) {
     ExecutorService workerPool =
         ThreadPools.newWorkerPool(threadName, scanContext.planParallelism());
-    try {
+    tableLoader.open();
+    try (TableLoader loader = tableLoader) {
       List<IcebergSourceSplit> splits =
-          FlinkSplitPlanner.planIcebergSourceSplits(lazyTable(), scanContext, workerPool);
+          FlinkSplitPlanner.planIcebergSourceSplits(loader.loadTable(), scanContext, workerPool);
       LOG.info(
           "Discovered {} splits from table {} during job initialization",
           splits.size(),
-          lazyTable().name());
+          tableName());
       return splits;
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to close table loader", e);
     } finally {
       workerPool.shutdown();
     }
   }
 
-  private Table lazyTable() {
+  private String tableName() {
     if (table == null) {
       tableLoader.open();
       try (TableLoader loader = tableLoader) {
@@ -140,7 +146,7 @@ public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEn
       }
     }
 
-    return table;
+    return table.name();
   }
 
   @Override
@@ -151,7 +157,7 @@ public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEn
   @Override
   public SourceReader<T, IcebergSourceSplit> createReader(SourceReaderContext readerContext) {
     IcebergSourceReaderMetrics metrics =
-        new IcebergSourceReaderMetrics(readerContext.metricGroup(), lazyTable().name());
+        new IcebergSourceReaderMetrics(readerContext.metricGroup(), tableName());
     return new IcebergSourceReader<>(metrics, readerFunction, splitComparator, readerContext);
   }
 
@@ -187,17 +193,21 @@ public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEn
       LOG.info(
           "Iceberg source restored {} splits from state for table {}",
           enumState.pendingSplits().size(),
-          lazyTable().name());
+          tableName());
       assigner = assignerFactory.createAssigner(enumState.pendingSplits());
     }
 
+    // Create a copy of the table loader to avoid lifecycle management conflicts with the user
+    // provided table loader. This copy is only required for split planning, which uses the
+    // underlying io, and should be closed after split planning is complete
+    TableLoader tableLoaderCopy = tableLoader.clone();
     if (scanContext.isStreaming()) {
       ContinuousSplitPlanner splitPlanner =
-          new ContinuousSplitPlannerImpl(tableLoader.clone(), scanContext, planningThreadName());
+          new ContinuousSplitPlannerImpl(tableLoaderCopy, scanContext, planningThreadName());
       return new ContinuousIcebergEnumerator(
           enumContext, assigner, scanContext, splitPlanner, enumState);
     } else {
-      List<IcebergSourceSplit> splits = planSplitsForBatch(planningThreadName());
+      List<IcebergSourceSplit> splits = planSplitsForBatch(tableLoaderCopy, planningThreadName());
       assigner.onDiscoveredSplits(splits);
       return new StaticIcebergEnumerator(enumContext, assigner);
     }
