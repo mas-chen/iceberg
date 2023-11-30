@@ -16,16 +16,32 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.iceberg.flink.util;
+package org.apache.iceberg.flink;
 
-import org.junit.Assert;
-import org.junit.Test;
+import java.util.concurrent.TimeUnit;
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.metrics.Gauge;
 
-public class TestFlinkPackage {
+/**
+ * This gauge measures the elapsed time between now and last recorded time set by {@link
+ * ElapsedTimeGauge#refreshLastRecordedTime()}.
+ */
+@Internal
+public class ElapsedTimeGauge implements Gauge<Long> {
+  private final TimeUnit reportUnit;
+  private volatile long lastRecordedTimeNano;
 
-  /** This unit test would need to be adjusted as new Flink version is supported. */
-  @Test
-  public void testVersion() {
-    Assert.assertEquals("1.17.1.26.1f31a8d05acb-apple-aiml", FlinkPackage.version());
+  public ElapsedTimeGauge(TimeUnit timeUnit) {
+    this.reportUnit = timeUnit;
+    refreshLastRecordedTime();
+  }
+
+  public void refreshLastRecordedTime() {
+    this.lastRecordedTimeNano = System.nanoTime();
+  }
+
+  @Override
+  public Long getValue() {
+    return reportUnit.convert(System.nanoTime() - lastRecordedTimeNano, TimeUnit.NANOSECONDS);
   }
 }
