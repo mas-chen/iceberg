@@ -10,6 +10,7 @@ machine:
     RUNTIME_JDK_VERSION: 8-applejdk
     skipTest: false
     CODE_VERSION: $(./code_version.sh)
+    GRADLE_LOG_LEVEL: INFO
 
 reports:
   checkstyle: true
