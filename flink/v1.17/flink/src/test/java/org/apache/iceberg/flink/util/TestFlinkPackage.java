@@ -26,6 +26,6 @@ public class TestFlinkPackage {
   /** This unit test would need to be adjusted as new Flink version is supported. */
   @Test
   public void testVersion() {
-    Assert.assertEquals("1.17.1.26.1f31a8d05acb-apple-aiml", FlinkPackage.version());
+    Assert.assertEquals("1.17.1.25.8f46166eea59-apple-aiml", FlinkPackage.version());
   }
 }
