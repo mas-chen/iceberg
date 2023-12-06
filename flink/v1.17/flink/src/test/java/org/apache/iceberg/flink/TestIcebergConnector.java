@@ -21,6 +21,7 @@ package org.apache.iceberg.flink;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Map;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
@@ -182,6 +183,7 @@ public class TestIcebergConnector extends FlinkTestBase {
             env.enableCheckpointing(400);
             env.setMaxParallelism(2);
             env.setParallelism(2);
+            env.setRestartStrategy(RestartStrategies.noRestart());
             tEnv = StreamTableEnvironment.create(env, settingsBuilder.build());
           } else {
             settingsBuilder.inBatchMode();
@@ -191,7 +193,8 @@ public class TestIcebergConnector extends FlinkTestBase {
           tEnv.getConfig()
               .getConfiguration()
               .set(CoreOptions.DEFAULT_PARALLELISM, 1)
-              .set(FlinkConfigOptions.TABLE_EXEC_ICEBERG_INFER_SOURCE_PARALLELISM, false);
+              .set(FlinkConfigOptions.TABLE_EXEC_ICEBERG_INFER_SOURCE_PARALLELISM, false)
+              .setString("restart-strategy.type", "none");
         }
       }
     }
