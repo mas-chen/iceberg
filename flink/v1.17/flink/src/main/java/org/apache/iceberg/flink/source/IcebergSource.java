@@ -102,6 +102,9 @@ public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEn
       SerializableComparator<IcebergSourceSplit> splitComparator,
       Table table,
       SerializableRecordEmitter<T> emitter) {
+    Preconditions.checkNotNull(tableLoader, "tableLoader is required.");
+    Preconditions.checkNotNull(readerFunction, "readerFunction is required.");
+    Preconditions.checkNotNull(assignerFactory, "assignerFactory is required.");
     this.tableLoader = tableLoader;
     this.scanContext = scanContext;
     this.readerFunction = readerFunction;
@@ -547,7 +550,6 @@ public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEn
         }
       }
 
-      checkRequired();
       // Since builder already load the table, pass it to the source to avoid double loading
       return new IcebergSource<>(
           tableLoader,
@@ -557,12 +559,6 @@ public class IcebergSource<T> implements Source<T, IcebergSourceSplit, IcebergEn
           splitComparator,
           table,
           emitter);
-    }
-
-    private void checkRequired() {
-      Preconditions.checkNotNull(tableLoader, "tableLoader is required.");
-      Preconditions.checkNotNull(splitAssignerFactory, "assignerFactory is required.");
-      Preconditions.checkNotNull(readerFunction, "readerFunction is required.");
     }
   }
 }
