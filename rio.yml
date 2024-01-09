@@ -49,6 +49,8 @@ pipelines:
 - branchName: enumerator-metrics-preview
   build:
     template: buildozer:v4:publish
+    steps:
+      - ./gradlew -DsparkVersions= -DhiveVersions= -DflinkVersions=1.17 :iceberg-flink:iceberg-flink-1.17:build
   package:
     release: true
     libraries:
