@@ -115,4 +115,7 @@ public interface SplitAssigner extends Closeable {
    * snapshots and splits, which defeats the purpose of throttling.
    */
   int pendingSplitCount();
+
+  /** Pending records count */
+  long pendingRecords();
 }

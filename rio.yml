@@ -43,3 +43,17 @@ pipelines:
       annotate: true
     tag:
       expression: ${CODE_VERSION}
+
+- branchName: enumerator-metrics-preview
+  build:
+    template: buildozer:v4:publish
+  package:
+    release: true
+    libraries:
+      - publish:
+          - repo: m2:oss-patched
+  finally:
+    radar:
+      annotate: true
+    tag:
+      expression: ${CODE_VERSION}

@@ -1,1 +1,1 @@
-1.4.1-apple-aiml-flink-4
+1.4.1-apple-aiml-flink-4-preview

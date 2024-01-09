@@ -56,6 +56,7 @@ abstract class AbstractIcebergEnumerator
         // This number may not capture the entire backlog due to split discovery throttling to avoid
         // excessive memory footprint. Some pending splits may not have been discovered yet.
         .setUnassignedSplitsGauge(() -> Long.valueOf(assigner.pendingSplitCount()));
+    this.enumeratorContext.metricGroup().gauge("pendingRecords", assigner::pendingRecords);
   }
 
   @Override
