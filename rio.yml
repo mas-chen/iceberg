@@ -11,6 +11,7 @@ machine:
     skipTest: false
     CODE_VERSION: $(./code_version.sh)
     GRADLE_LOG_LEVEL: INFO
+    CI_HOOKS: ./ci_hooks
 
 jenkins:
   concurrentBuild: true
@@ -47,9 +48,6 @@ pipelines:
 - branchName: enumerator-metrics-preview
   build:
     template: buildozer:v4:publish
-    steps:
-      - java -version
-      - javac -version
   machine:
     # use a jdk 11 image, Rio defaults to a Java 21 image.
     baseImage: docker.apple.com/pie/boson:jdk11
