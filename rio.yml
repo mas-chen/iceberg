@@ -6,6 +6,8 @@ notify:
     postOnSuccess: false
 
 machine:
+  # use a jdk 11 image, Rio defaults to a Java 21 image.
+  baseImage: docker.apple.com/pie/boson:jdk11
   env:
     RUNTIME_JDK_VERSION: 11
     skipTest: false
